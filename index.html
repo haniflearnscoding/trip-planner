@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
   :root{
     --bg:#FAFAF8; --surface:#FFFFFF; --ink:#171717; --muted:#737373; --faint:#A3A3A3;
@@ -120,7 +121,7 @@
   <div class="app">
     <div id="board"></div>
     <div class="map-col">
-      <div id="map" class="placeholder"><span>The live map turns on once you add your Google Maps API key — see the README. Until then, every place still has a working <b>Maps&nbsp;↗</b> link.</span></div>
+      <div id="map"></div>
     </div>
   </div>
 
@@ -131,16 +132,8 @@
 </div>
 <div id="toast"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/* ======================= CONFIG ======================= */
-const CONFIG = {
-  // Paste your Google Maps JavaScript API key between the quotes, then redeploy.
-  // Enable "Maps JavaScript API" + "Geocoding API" in Google Cloud, and restrict
-  // the key to your GitHub Pages domain. See README.md for the full walkthrough.
-  mapsKey: ""
-};
-/* ====================================================== */
-
 const ICON = {
   plane:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.5 13.5L4 16l1-4-3-2.5 4-.5 2-4 1.5 4.5 8-2.5 1 2.5-7.5 4 1 5z"/></svg>',
   train:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="13" rx="2"/><path d="M9 16l-2 4M15 16l2 4M8 9h8"/></svg>',
@@ -271,49 +264,32 @@ $('#download').addEventListener('click', ()=>{
   const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='itinerary.json'; a.click();
 });
 
-/* ---------- Google Maps ---------- */
-let map, geocoder, infowin, markers={};
-const MAP_STYLE=[
-  {elementType:'geometry',stylers:[{color:'#f5f5f3'}]},
-  {elementType:'labels.text.fill',stylers:[{color:'#6b6b6b'}]},
-  {elementType:'labels.text.stroke',stylers:[{color:'#ffffff'}]},
-  {featureType:'water',elementType:'geometry',stylers:[{color:'#d7e4ea'}]},
-  {featureType:'road',elementType:'geometry',stylers:[{color:'#ffffff'}]},
-  {featureType:'poi',stylers:[{visibility:'simplified'}]},
-  {featureType:'transit',elementType:'labels.icon',stylers:[{visibility:'off'}]}
-];
-window.initMap = function(){
-  const el=$('#map'); el.classList.remove('placeholder'); el.innerHTML='';
-  map=new google.maps.Map(el,{center:{lat:36.2,lng:135.5},zoom:5,mapTypeControl:false,streetViewControl:false,styles:MAP_STYLE});
-  geocoder=new google.maps.Geocoder();
-  infowin=new google.maps.InfoWindow();
+/* ---------- Leaflet Map ---------- */
+let map, markers={};
+
+function initMap(){
+  const el=$('#map');
+  map=L.map(el,{zoomControl:true}).setView([36.2,135.5],5);
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
+    subdomains:'abcd', maxZoom:19
+  }).addTo(map);
   syncMarkers();
-};
-function showMapPlaceholder(msg){ const el=$('#map'); el.className='placeholder'; el.innerHTML='<span>'+esc(msg)+'</span>'; }
-function loadMaps(){
-  if(!CONFIG.mapsKey){ return; }
-  const s=document.createElement('script');
-  s.src='https://maps.googleapis.com/maps/api/js?key='+encodeURIComponent(CONFIG.mapsKey)+'&callback=initMap&loading=async';
-  s.async=true; s.onerror=()=>showMapPlaceholder('Map failed to load — check the API key and that Maps JavaScript API is enabled.');
-  document.head.appendChild(s);
 }
-function legForDay(k){ return TRIP.find(l=>l.days.some(d=>d.k===k)); }
-function dayObj(k){ for(const l of TRIP){ const d=l.days.find(x=>x.k===k); if(d) return d; } }
 function addMarker(it, d, leg){
-  const pos={lat:it.lat,lng:it.lng};
-  const m=new google.maps.Marker({position:pos,map,title:it.name,icon:{path:google.maps.SymbolPath.CIRCLE,scale:7,fillColor:LEG_HEX[leg.key],fillOpacity:1,strokeColor:'#fff',strokeWeight:2}});
-  m.addListener('click',()=>{ infowin.setContent('<div style="font:14px Schibsted Grotesk,sans-serif;line-height:1.5"><strong>'+esc(it.name)+'</strong><br><span style="color:#737373">Jun '+d.n+' · '+d.wd+'</span><br><a href="'+mapUrl(it.name,leg.maps)+'" target="_blank" rel="noopener">Open in Google Maps ↗</a></div>'); infowin.open(map,m); });
+  const m=L.circleMarker([it.lat,it.lng],{radius:7,fillColor:LEG_HEX[leg.key],fillOpacity:1,color:'#fff',weight:2}).addTo(map);
+  m.bindPopup('<div style="font:14px \'Schibsted Grotesk\',sans-serif;line-height:1.5"><strong>'+esc(it.name)+'</strong><br><span style="color:#737373">Jun '+d.n+' · '+d.wd+'</span><br><a href="'+mapUrl(it.name,leg.maps)+'" target="_blank" rel="noopener">Open in Maps ↗</a></div>');
   markers[it.id]=m;
 }
 function refit(){
   if(!map) return; const ks=Object.keys(markers); if(!ks.length) return;
-  const b=new google.maps.LatLngBounds(); ks.forEach(k=>b.extend(markers[k].getPosition()));
-  if(ks.length===1){ map.setCenter(markers[ks[0]].getPosition()); map.setZoom(14); } else map.fitBounds(b,60);
+  if(ks.length===1){ map.setView(markers[ks[0]].getLatLng(),14); }
+  else{ map.fitBounds(L.featureGroup(Object.values(markers)).getBounds().pad(0.15)); }
 }
 let geocoding=false;
 function syncMarkers(){
   if(!map) return;
-  Object.values(markers).forEach(m=>m.setMap(null)); markers={};
+  Object.values(markers).forEach(m=>m.remove()); markers={};
   const pending=[];
   TRIP.forEach(leg=>leg.days.forEach(d=>{
     (state.items[d.k]||[]).forEach(it=>{
@@ -330,11 +306,11 @@ function runGeocode(list){
     if(i>=list.length){ geocoding=false; return; }
     const {it,d,leg}=list[i++];
     if(typeof it.lat==='number'){ next(); return; }
-    geocoder.geocode({address: it.name+', '+leg.maps},(res,status)=>{
-      if(status==='OK'&&res&&res[0]){ const loc=res[0].geometry.location; it.lat=loc.lat(); it.lng=loc.lng(); save(); addMarker(it,d,leg); refit(); }
-      else { it._gf=true; }
-      setTimeout(next,240);
-    });
+    fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(it.name+', '+leg.maps),{headers:{'Accept-Language':'en'}})
+      .then(r=>r.json())
+      .then(res=>{ if(res&&res[0]){ it.lat=parseFloat(res[0].lat); it.lng=parseFloat(res[0].lon); save(); addMarker(it,d,leg); refit(); } else { it._gf=true; } })
+      .catch(()=>{ it._gf=true; })
+      .finally(()=>setTimeout(next,350));
   })();
 }
 
@@ -349,7 +325,7 @@ function runGeocode(list){
   if(!state.items || !Object.keys(state.items).length){
     const saved=LS.get(KEY); if(saved){ try{ state.items=JSON.parse(saved); }catch(e){} }
   } else { LS.set(KEY,JSON.stringify(state.items)); }
-  setStatus('ok'); render(); loadMaps();
+  setStatus('ok'); render(); initMap();
 })();
 </script>
 </body>
