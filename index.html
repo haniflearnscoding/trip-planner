@@ -127,7 +127,7 @@
 
   <footer>
     <b>How it works.</b> Tap <b>+ Add a place</b> on any day, start typing (the box suggests spots from the original plan, or type your own), and it drops a pin on the map. <b>Copy share link</b> hands the whole itinerary to your girlfriend so you can co-plan. Changes save in your browser automatically.<br><br>
-    <b>Note:</b> Google doesn't let outside apps read your saved Maps lists, so starred pins can't auto-import — add them by name instead.
+    <b>Note:</b> Map pins use OpenStreetMap — it knows major landmarks and districts well but misses small local spots. If a pin doesn't appear, the <b>Maps ↗</b> link next to the name still opens it in Google Maps.
   </footer>
 </div>
 <div id="toast"></div>
@@ -308,8 +308,8 @@ function runGeocode(list){
     if(typeof it.lat==='number'){ next(); return; }
     fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent(it.name+', '+leg.maps),{headers:{'Accept-Language':'en'}})
       .then(r=>r.json())
-      .then(res=>{ if(res&&res[0]){ it.lat=parseFloat(res[0].lat); it.lng=parseFloat(res[0].lon); save(); addMarker(it,d,leg); refit(); } else { it._gf=true; } })
-      .catch(()=>{ it._gf=true; })
+      .then(res=>{ if(res&&res[0]){ it.lat=parseFloat(res[0].lat); it.lng=parseFloat(res[0].lon); save(); addMarker(it,d,leg); refit(); } else { it._gf=true; toast('"'+it.name+'" couldn\'t be pinned — Maps ↗ link still works'); } })
+      .catch(()=>{ it._gf=true; toast('"'+it.name+'" couldn\'t be pinned — Maps ↗ link still works'); })
       .finally(()=>setTimeout(next,350));
   })();
 }
