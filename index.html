@@ -266,6 +266,12 @@ $('#download').addEventListener('click', ()=>{
 
 /* ---------- Leaflet Map ---------- */
 let map, markers={};
+const HOTEL_COORDS = {
+  'Check in Myeongdong':    {lat:37.5636,lng:126.9840},
+  'Check in Centara Grand': {lat:34.6863,lng:135.5014},
+  'Check in Villa Fontaine':{lat:35.6573,lng:139.7577}
+};
+const hotelMarkers=[];
 
 function initMap(){
   const el=$('#map');
@@ -274,7 +280,24 @@ function initMap(){
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
     subdomains:'abcd', maxZoom:19
   }).addTo(map);
+  syncHotels();
   syncMarkers();
+}
+function syncHotels(){
+  if(!map) return;
+  hotelMarkers.forEach(m=>m.remove()); hotelMarkers.length=0;
+  TRIP.forEach(leg=>leg.days.forEach(d=>{
+    d.anchors.forEach(([ic,text])=>{
+      if(ic!=='bed') return;
+      const coords=HOTEL_COORDS[text]; if(!coords) return;
+      const name=text.replace(/^check in\s+/i,'').trim();
+      const m=L.circleMarker([coords.lat,coords.lng],{
+        radius:8,fillColor:'#fff',fillOpacity:1,color:LEG_HEX[leg.key],weight:2.5
+      }).addTo(map);
+      m.bindPopup('<div style="font:14px \'Schibsted Grotesk\',sans-serif;line-height:1.5"><strong>'+esc(name)+'</strong><br><span style="color:#737373">Jun '+d.n+' · check-in</span><br><a href="'+mapUrl(name,leg.maps)+'" target="_blank" rel="noopener">Open in Maps ↗</a></div>');
+      hotelMarkers.push(m);
+    });
+  }));
 }
 function addMarker(it, d, leg){
   const m=L.circleMarker([it.lat,it.lng],{radius:7,fillColor:LEG_HEX[leg.key],fillOpacity:1,color:'#fff',weight:2}).addTo(map);
